@@ -1,4 +1,4 @@
-# Shared genetic architecture between Major depressive disorder subtypes and cardiovascular diseases
+# Shared genetic architecture between major depressive disorder subtypes and cardiovascular diseases
 
 Analysis code for the study **"Dissecting the shared genetic architecture
 between major depressive disorder subtypes and cardiovascular diseases: a multi-layered
