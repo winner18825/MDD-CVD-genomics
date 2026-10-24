@@ -20,6 +20,21 @@ placo_dir     <- file.path(RESULTS_DIR, "placo")
 out_dir       <- file.path(RESULTS_DIR, "merge_cpassoc_placo")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
+get_raw_p <- function(path, new_col) {
+  dat <- data.table::fread(path)
+  normalized_names <- tolower(gsub("[^[:alnum:]]", "", names(dat)))
+  p_idx <- which(normalized_names %in% c("p", "pval", "pvalue"))
+  if (length(p_idx) != 1L) {
+    stop("Cannot uniquely identify the P-value column in: ",path,". Available columns: ",paste(names(dat), collapse = ", "))}
+  p_col <- names(dat)[p_idx]
+  dat <- dat[grepl("^rs", SNP)]
+  dat[, SNP := sub(",.*$", "", SNP)]
+  dat <- dat[!duplicated(SNP)]
+  out <- dat[, .(SNP,p_tmp = as.numeric(get(p_col)))]
+  data.table::setnames(out, "p_tmp", new_col)
+  return(out)
+}
+
 merged_all <- list()
 for (m in MDD_TRAITS) {
   for (cv in CVD_TRAITS) {
@@ -31,10 +46,24 @@ for (m in MDD_TRAITS) {
     cp <- data.table::fread(cp_file)
     pl <- data.table::fread(pl_file)
       
-    # CPASSOC: genome-wide significant SHet, both single-trait p < 1e-3
-    cp <- cp[p_SHet < 5e-8 & pval.x < 1e-3 & pval.y < 1e-3]
-    # PLACO: genome-wide significant composite p
-    pl <- pl[p.placo < 5e-8]
+    # Read original GWAS files for the two traits
+    trait1_path <- file.path(DATA_DIR, paste0(m, ".txt"))
+    trait2_path <- file.path(DATA_DIR, paste0(cv, ".txt"))
+      
+    # Extract original single-trait P-values
+    p1 <- get_raw_p(trait1_path, "pval_trait1")
+    p2 <- get_raw_p(trait2_path, "pval_trait2")
+      
+    # Match original P-values to CPASSOC results by SNP
+    cp <- merge(cp, p1, by = "SNP")
+    cp <- merge(cp, p2, by = "SNP")
+      
+    # CPASSOC significance filtering
+    cp <- cp[!is.na(p_SHet) & p_SHet < 5e-8 &
+             !is.na(pval_trait1) & pval_trait1 < 1e-3 & 
+             !is.na(pval_trait2) & pval_trait2 < 1e-3]
+    # PLACO significance filtering
+    pl <- pl[!is.na(p.placo) & p.placo < 5e-8]
     
     shared <- merge(cp, pl, by = "SNP", suffixes = c(".x", ".y"))
     # plink 
